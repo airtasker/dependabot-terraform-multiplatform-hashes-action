@@ -24,6 +24,7 @@ on:
 
 jobs:
   dependabot-terraform-multiplatform-hashes:
+    if: startsWith(github.head_ref, 'dependabot/')
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.DEPENDABOT_TERRAFORM_GITHUB_TOKEN }}

@@ -1,6 +1,11 @@
 # action.yml
 name: 'Dependabot terraform multiplatform hashes'
 description: 'Automatically update dependabot terraform pull requests to include multiplatform hashes.'
+inputs:
+  terraform_platforms:
+    description: 'Comma separated list of the terraform platforms to fetch the hashes for.'
+    required: false
+    default: 'darwin_amd64,darwin_arm64,linux_amd64'
 runs:
   using: 'docker'
   image: 'Dockerfile'

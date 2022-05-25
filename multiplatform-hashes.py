@@ -4,7 +4,7 @@ import os
 import re
 import subprocess
 import tempfile
-from typing import Any, Dict
+from typing import Any, Dict, List
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
@@ -20,6 +20,7 @@ PR_NUMBER: int = 0
 FIXED_LABEL: str = ''
 
 TERRAFORM_PREFIX: str = ''
+TERRAFORM_PLATFORMS: List[str] = []
 
 
 def make_get_request(path: str, expected_status: int = 200) -> Dict[str, Any]:
@@ -103,12 +104,12 @@ def main():
 
         # Initialize the terraform directory, ignoring errors.
         try:
-            subprocess.run([terraform_path, 'init'])
+            subprocess.check_call([terraform_path, 'init'])
         except subprocess.CalledProcessError:
             pass
 
         # Attempt to create the multiplatform hashes.
-        subprocess.check_call([terraform_path, 'providers', 'lock', '-platform=darwin_amd64', '-platform=darwin_arm64', '-platform=linux_amd64'])
+        subprocess.check_call([terraform_path, 'providers', 'lock'] + [f'-platform={p}' for p in TERRAFORM_PLATFORMS])
 
         # Commit and push any changes to the lock file. We catch the error on commit as it is
         # possible that no changes were made, at which point `git commit` fails as there's nothing
@@ -137,7 +138,8 @@ if __name__ == '__main__':
     parser.add_argument('--gh-repository', required=True, help='The GitHub organisation/repository pair. You probably want to set this to be the $GITHUB_REPOSITORY')
     parser.add_argument('--gh-token-env-var', default='GITHUB_TOKEN', help='The name of the environment variable to read the GitHub auth token from.')
     parser.add_argument('--fixed-label', default='multiplatform-hashes', help='The name of the label to apply to PRs that have had this fix applied.')
-    parser.add_argument('--terraform-bin-prefix', default='/opt/terraform', help='The location of where the different versions of terraform are installed.')
+    parser.add_argument('--terraform-platforms', default='darwin_amd64,darwin_arm64,linux_amd64', help='Comma separated list of the terraform platforms to fetch the hashes for.')
+    parser.add_argument('--terraform-prefix', default='/opt/terraform', help='The location of where the different versions of terraform are installed.')
     args = parser.parse_args()
 
     API_PREFIX = args.gh_api_prefix
@@ -145,6 +147,7 @@ if __name__ == '__main__':
     PR_NUMBER = args.gh_pr_number
     REPO_OWNER, REPO_NAME = args.gh_repository.split('/')
     FIXED_LABEL = args.fixed_label
-    TERRAFORM_PREFIX = args.terraform_bin_prefix
+    TERRAFORM_PREFIX = args.terraform_prefix
+    TERRAFORM_PLATFORMS = [p.strip() for p in args.terraform_platforms.split(',')]
 
     main()
