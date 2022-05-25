@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-Set of available environment variables: https://docs.github.com/en/actions/learn-github-actions/environment-variables
-"""
 import json
 import os
 import re
@@ -13,22 +10,21 @@ from urllib.request import Request, urlopen
 
 RE_PR_TITLE_FORMAT = re.compile(r'^Bump .+ from .+ to .+ in (?P<path>.+)$')
 
-GH_API_PREFIX = os.environ['GITHUB_API_URL']
-GH_REF = os.environ['GITHUB_REF']
-GH_REPOSITORY = os.environ['GITHUB_REPOSITORY']
-GH_TOKEN = os.environ['GITHUB_TOKEN']
+API_PREFIX: str = ''
+API_TOKEN: str = ''
 
-TERRAFORM_PREFIX = '/opt/terraform'
+REPO_OWNER: str = ''
+REPO_NAME: str = ''
+PR_NUMBER: int = 0
 
-REPO_OWNER, REPO_NAME = GH_REPOSITORY.split('/')
-PR_NUMBER = int(re.sub(r'^refs/pull/(\d+)/merge$', r'\1', GH_REF))
+FIXED_LABEL: str = ''
 
-FIXER_LABEL = 'multiplatform-hashes'
+TERRAFORM_PREFIX: str = ''
 
 
 def make_get_request(path: str, expected_status: int = 200) -> Dict[str, Any]:
-    request = Request(urljoin(GH_API_PREFIX, path))
-    request.add_header('Authorization', f'token {GH_TOKEN}')
+    request = Request(urljoin(API_PREFIX, path))
+    request.add_header('Authorization', f'token {API_TOKEN}')
     request.add_header('Accept', 'application/vnd.github.v3+json')
     with urlopen(request) as response:
         assert response.status == expected_status, response.status
@@ -37,9 +33,8 @@ def make_get_request(path: str, expected_status: int = 200) -> Dict[str, Any]:
 
 
 def make_modify_request(method: str, path: str, body: Dict[str, Any], expected_status: int = 200) -> Dict[str, Any]:
-    json_payload = json.dumps(body)
-    request = Request(urljoin(GH_API_PREFIX, path), method=method, data=json.dumps(body).encode('utf-8'))
-    request.add_header('Authorization', f'token {GH_TOKEN}')
+    request = Request(urljoin(API_PREFIX, path), method=method, data=json.dumps(body).encode('utf-8'))
+    request.add_header('Authorization', f'token {API_TOKEN}')
     request.add_header('Accept', 'application/vnd.github.v3+json')
     with urlopen(request) as response:
         assert response.status == expected_status, response.status
@@ -50,7 +45,7 @@ def make_modify_request(method: str, path: str, body: Dict[str, Any], expected_s
 def main():
     # Get information about the PR.
     # See: https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request
-    pr_payload = make_get_request(f'repos/{GH_REPOSITORY}/pulls/{PR_NUMBER}')
+    pr_payload = make_get_request(f'repos/{REPO_OWNER}/{REPO_NAME}/pulls/{PR_NUMBER}')
 
     # Bail if this is not a terraform dependabot PR.
     pr_label_names = {label['name'] for label in pr_payload.get('labels', [])}
@@ -59,7 +54,7 @@ def main():
         return
 
     # Bail if this PR has already had this fixing up process applied to it.
-    if FIXER_LABEL in pr_label_names:
+    if FIXED_LABEL in pr_label_names:
         print('Bailing as this is PR has already had the fix applied.')
         return
 
@@ -72,7 +67,7 @@ def main():
     subprocess.check_call(['git', 'config', '--global', 'user.email', user_payload['email']])
 
     # Rewrite all SSH git operations to use HTTPS with our access token.
-    subprocess.check_call(['git', 'config', '--global', f'url.https://oauth2:{GH_TOKEN}@github.com.insteadOf', 'ssh://git@github.com'])
+    subprocess.check_call(['git', 'config', '--global', f'url.https://oauth2:{API_TOKEN}@github.com.insteadOf', 'ssh://git@github.com'])
 
     # Obtain the terraform project path from the PR title.
     pr_title = pr_payload['title']
@@ -127,11 +122,29 @@ def main():
             subprocess.check_call(['git', 'push'])
 
     # Add the fixed label to the PR so that the fixer process does not attempt to run again.
-    pr_label_names.add(FIXER_LABEL)
-    make_modify_request('PATCH', f'repos/{GH_REPOSITORY}/issues/{PR_NUMBER}', {
+    pr_label_names.add(FIXED_LABEL)
+    make_modify_request('PATCH', f'repos/{REPO_OWNER}/{REPO_NAME}/issues/{PR_NUMBER}', {
         'labels': list(pr_label_names),
     })
 
 
 if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='A GitHub PR action for automatically adding terraform multiplatform hashes to a dependabot terraform PR.')
+    parser.add_argument('--gh-api-prefix', default='https://api.github.com', help='The API prefix to make GitHub API requests to. You probably want to set this to be $GITHUB_API_URL')
+    parser.add_argument('--gh-pr-number', required=True, type=int, help='The GitHub PR number. You probably want to extract this from $GITHUB_REF.')
+    parser.add_argument('--gh-repository', required=True, help='The GitHub organisation/repository pair. You probably want to set this to be the $GITHUB_REPOSITORY')
+    parser.add_argument('--gh-token-env-var', default='GITHUB_TOKEN', help='The name of the environment variable to read the GitHub auth token from.')
+    parser.add_argument('--fixed-label', default='multiplatform-hashes', help='The name of the label to apply to PRs that have had this fix applied.')
+    parser.add_argument('--terraform-bin-prefix', default='/opt/terraform', help='The location of where the different versions of terraform are installed.')
+    args = parser.parse_args()
+
+    API_PREFIX = args.gh_api_prefix
+    API_TOKEN = os.environ[args.gh_token_env_var]
+    PR_NUMBER = args.gh_pr_number
+    REPO_OWNER, REPO_NAME = args.gh_repository.split('/')
+    FIXED_LABEL = args.fixed_label
+    TERRAFORM_PREFIX = args.terraform_bin_prefix
+
     main()
