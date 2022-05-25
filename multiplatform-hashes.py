@@ -18,6 +18,9 @@ GH_REF = os.environ['GITHUB_REF']
 GH_REPOSITORY = os.environ['GITHUB_REPOSITORY']
 GH_TOKEN = os.environ['GITHUB_TOKEN']
 
+COMMIT_USER_NAME = os.environ['INPUT_COMMIT_USER_NAME']
+COMMIT_USER_EMAIL = os.environ['INPUT_COMMIT_USER_EMAIL']
+
 TERRAFORM_PREFIX = '/opt/terraform'
 
 REPO_OWNER, REPO_NAME = GH_REPOSITORY.split('/')
@@ -63,13 +66,9 @@ def main():
         print('Bailing as this is PR has already had the fix applied.')
         return
 
-    # Get information about our GitHub user.
-    # See: https://docs.github.com/en/rest/users/users#get-the-authenticated-user
-    user_payload = make_get_request('user')
-
     # Set our git commit identification.
-    subprocess.check_call(['git', 'config', '--global', 'user.name', user_payload['name']])
-    subprocess.check_call(['git', 'config', '--global', 'user.email', user_payload['email']])
+    subprocess.check_call(['git', 'config', '--global', 'user.name', COMMIT_USER_NAME])
+    subprocess.check_call(['git', 'config', '--global', 'user.email', COMMIT_USER_EMAIL])
 
     # Rewrite all SSH git operations to use HTTPS with our access token.
     subprocess.check_call(['git', 'config', '--global', f'url.https://oauth2:{GH_TOKEN}@github.com.insteadOf', 'ssh://git@github.com'])

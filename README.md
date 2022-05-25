@@ -13,9 +13,7 @@ on:
       - opened
       - unlabeled
     branches:
-      - 'dependabot/**'
-    paths:
-      - '**.tf'
+      - master  # This is the *target* branch of the PR, not the head branch.
 
 jobs:
   dependabot-terraform-multiplatform-hashes:
@@ -27,8 +25,10 @@ jobs:
     steps:
       - name: Dependabot terraform multiplatform hashes
         id: dependabot-terraform-multiplatform-hashes
-        uses: airtasker/dependabot-terraform-multiplatform-hashes-action@master
+        uses: airtasker/dependabot-terraform-multiplatform-hashes-action@main
         with:
+          commit-user-name: 'GitHub Action user.'
+          commit-user-email: 'automated@example.com'
           github-api-url: ${{ env.GITHUB_API_URL }}
           github-ref: ${{ env.GITHUB_REF }}
           github-repository: ${{ env.GITHUB_REPOSITORY }}
