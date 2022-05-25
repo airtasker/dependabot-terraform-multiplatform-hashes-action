@@ -4,6 +4,13 @@ This follows the conventions outlined in https://docs.github.com/en/actions/crea
 
 ## Example usage
 
+This requires having a secret (either repo or org level) called `DEPENDABOT_TERRAFORM_GITHUB_TOKEN`, which is a GitHub personal user token for a bot account that has access to the GitHub org where terraform dependencies are stored. It needs the following permissions:
+* Ability to read and clone the repos where the target terraform modules are stored.
+* Ability to read PRs on the current repo.
+* Ability to add labels to issues on the current repo.
+* Ability to commit to a branch on the current repo.
+* Ability to read their own user profile.
+
 ```yaml
 name: Dependabot terraform multiplatform hashes
 
@@ -18,19 +25,12 @@ on:
 jobs:
   dependabot-terraform-multiplatform-hashes:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: read
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.DEPENDABOT_TERRAFORM_GITHUB_TOKEN }}
     steps:
       - name: Dependabot terraform multiplatform hashes
         id: multiplatform-hashes
         uses: airtasker/dependabot-terraform-multiplatform-hashes-action@main
-        with:
-          commit-user-name: 'GitHub Action user.'
-          commit-user-email: 'automated@example.com'
 ```
 
 ## Useful links

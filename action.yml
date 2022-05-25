@@ -1,13 +1,6 @@
 # action.yml
 name: 'Dependabot terraform multiplatform hashes'
 description: 'Automatically update dependabot terraform pull requests to include multiplatform hashes.'
-inputs:
-  commit-user-name:
-    description: 'The name of the user to commit as.'
-    required: true
-  commit-user-email:
-    description: 'The email address of the user to commit as.'
-    required: true
 runs:
   using: 'docker'
   image: 'Dockerfile'
