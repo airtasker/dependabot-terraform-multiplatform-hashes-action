@@ -22,17 +22,15 @@ jobs:
       contents: write
       issues: write
       pull-requests: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Dependabot terraform multiplatform hashes
-        id: dependabot-terraform-multiplatform-hashes
+        id: multiplatform-hashes
         uses: airtasker/dependabot-terraform-multiplatform-hashes-action@main
         with:
           commit-user-name: 'GitHub Action user.'
           commit-user-email: 'automated@example.com'
-          github-api-url: ${{ env.GITHUB_API_URL }}
-          github-ref: ${{ env.GITHUB_REF }}
-          github-repository: ${{ env.GITHUB_REPOSITORY }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ## Useful links

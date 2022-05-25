@@ -8,23 +8,6 @@ inputs:
   commit-user-email:
     description: 'The email address of the user to commit as.'
     required: true
-  #github-api-url:
-    #description: 'The URL of the GitHub API. This is accessible via the `GITHUB_API_URL` env var.'
-    #required: true
-  #github-ref:
-    #description: 'The ref of the pull request. This is accessible via the `GITHUB_REF` env var.'
-    #required: true
-  #github-repository:
-    #description: 'The owner/repo pair of the repo of the pull request. This is accessible via the `GITHUB_REPOSITORY` env var.'
-    #required: true
-  #github-token:
-    #description: 'The auth token to hit the GitHub API with. This is accessible via the `GITHUB_TOKEN` env var.'
-    #required: true
 runs:
   using: 'docker'
   image: 'Dockerfile'
-  #env:
-    #GITHUB_API_URL: ${{ inputs.github-api-url }}
-    #GITHUB_REF: ${{ inputs.github-ref }}
-    #GITHUB_REPOSITORY: ${{ inputs.github-repository }}
-    #GITHUB_TOKEN: ${{ inputs.github-token }}
