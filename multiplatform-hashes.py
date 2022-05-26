@@ -62,10 +62,14 @@ def main():
     # Get information about our GitHub user.
     # See: https://docs.github.com/en/rest/users/users#get-the-authenticated-user
     user_payload = make_get_request('user')
+    user_name = (user_payload.get('name') or '').strip() or user_payload['login']
+    # See: https://docs.github.com/en/rest/users/emails#list-email-addresses-for-the-authenticated-user
+    user_email_payload = make_get_request('user/emails')
+    user_email = [p['email'] for p in user_email_payload if p['primary']][0]
 
     # Set our git commit identification.
-    subprocess.check_call(['git', 'config', '--global', 'user.name', user_payload['name']])
-    subprocess.check_call(['git', 'config', '--global', 'user.email', user_payload['email']])
+    subprocess.check_call(['git', 'config', '--global', 'user.name', user_name])
+    subprocess.check_call(['git', 'config', '--global', 'user.email', user_email])
 
     # Rewrite all SSH git operations to use HTTPS with our access token.
     subprocess.check_call(['git', 'config', '--global', f'url.https://oauth2:{API_TOKEN}@github.com.insteadOf', 'ssh://git@github.com'])
