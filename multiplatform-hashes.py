@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import json
+import logging
 import os
 import re
 import subprocess
 import tempfile
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
@@ -23,24 +24,23 @@ TERRAFORM_PREFIX: str = ''
 TERRAFORM_PLATFORMS: List[str] = []
 
 
-def make_get_request(path: str, expected_status: int = 200) -> Dict[str, Any]:
-    request = Request(urljoin(API_PREFIX, path))
+def make_request(method: str, path: str, body: Optional[bytes], expected_status: int = 200) -> Dict[str, Any]:
+    request = Request(urljoin(API_PREFIX, path), method=method, data=body)
     request.add_header('Authorization', f'token {API_TOKEN}')
     request.add_header('Accept', 'application/vnd.github.v3+json')
+    logging.info('Making a %s request to %s.', request.get_method(), request.get_full_url())
     with urlopen(request) as response:
         assert response.status == expected_status, response.status
         body = response.read().decode('utf-8')
         return json.loads(body)
+
+
+def make_get_request(path: str, expected_status: int = 200) -> Dict[str, Any]:
+    return make_request('GET', path, None, expected_status)
 
 
 def make_modify_request(method: str, path: str, body: Dict[str, Any], expected_status: int = 200) -> Dict[str, Any]:
-    request = Request(urljoin(API_PREFIX, path), method=method, data=json.dumps(body).encode('utf-8'))
-    request.add_header('Authorization', f'token {API_TOKEN}')
-    request.add_header('Accept', 'application/vnd.github.v3+json')
-    with urlopen(request) as response:
-        assert response.status == expected_status, response.status
-        body = response.read().decode('utf-8')
-        return json.loads(body)
+    return make_request(method, path, json.dumps(body).encode('utf-8'), expected_status)
 
 
 def main():
@@ -51,12 +51,12 @@ def main():
     # Bail if this is not a terraform dependabot PR.
     pr_label_names = {label['name'] for label in pr_payload.get('labels', [])}
     if not ('dependencies' in pr_label_names and 'terraform' in pr_label_names):
-        print('Bailing as this is not a terraform dependabot PR.')
+        logging.info('Bailing as this is not a terraform dependabot PR.')
         return
 
     # Bail if this PR has already had this fixing up process applied to it.
     if FIXED_LABEL in pr_label_names:
-        print('Bailing as this is PR has already had the fix applied.')
+        logging.info('Bailing as this is PR has already had the fix applied.')
         return
 
     # Get information about our GitHub user.
@@ -131,9 +131,16 @@ def main():
     make_modify_request('PATCH', f'repos/{REPO_OWNER}/{REPO_NAME}/issues/{PR_NUMBER}', {
         'labels': list(pr_label_names),
     })
+    logging.info('Finished applying multiplatform hashes fix to PR #%d.', PR_NUMBER)
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        format='%(asctime)s %(levelname)-8s %(message)s',
+        level=logging.INFO,
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
+
     import argparse
 
     parser = argparse.ArgumentParser(description='A GitHub PR action for automatically adding terraform multiplatform hashes to a dependabot terraform PR.')
@@ -153,5 +160,15 @@ if __name__ == '__main__':
     FIXED_LABEL = args.fixed_label
     TERRAFORM_PREFIX = args.terraform_prefix
     TERRAFORM_PLATFORMS = [p.strip() for p in args.terraform_platforms.split(',')]
+
+    logging.info('Running with the following configuration:')
+    logging.info('  API_PREFIX: %s', API_PREFIX)
+    logging.info('  API_TOKEN: ...%s', API_TOKEN[-3:])
+    logging.info('  PR_NUMBER: %d', PR_NUMBER)
+    logging.info('  REPO_OWNER: %s', REPO_OWNER)
+    logging.info('  REPO_NAME: %s', REPO_NAME)
+    logging.info('  FIXED_LABEL: %s', FIXED_LABEL)
+    logging.info('  TERRAFORM_PREFIX: %s', TERRAFORM_PREFIX)
+    logging.info('  TERRAFORM_PLATFORMS: %s', TERRAFORM_PLATFORMS)
 
     main()
