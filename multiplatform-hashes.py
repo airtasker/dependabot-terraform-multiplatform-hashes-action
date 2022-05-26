@@ -142,7 +142,7 @@ if __name__ == '__main__':
     parser.add_argument('--gh-repository', required=True, help='The GitHub organisation/repository pair. You probably want to set this to be the $GITHUB_REPOSITORY')
     parser.add_argument('--gh-token-env-var', default='GITHUB_TOKEN', help='The name of the environment variable to read the GitHub auth token from.')
     parser.add_argument('--fixed-label', default='multiplatform-hashes', help='The name of the label to apply to PRs that have had this fix applied.')
-    parser.add_argument('--terraform-platforms', default='darwin_amd64,darwin_arm64,linux_amd64', help='Comma separated list of the terraform platforms to fetch the hashes for.')
+    parser.add_argument('--terraform-platforms', default='darwin_amd64,linux_amd64', help='Comma separated list of the terraform platforms to fetch the hashes for.')
     parser.add_argument('--terraform-prefix', default='/opt/terraform', help='The location of where the different versions of terraform are installed.')
     args = parser.parse_args()
 
