@@ -10,6 +10,7 @@ This requires having a secret (either repo or org level) called `DEPENDABOT_TERR
 * Ability to add labels to issues on the current repo.
 * Ability to commit to a branch on the current repo.
 * Ability to read their own user profile.
+* Ability to read their own email addresses.
 
 ```yaml
 name: Dependabot terraform multiplatform hashes
@@ -31,7 +32,18 @@ jobs:
     steps:
       - name: Dependabot terraform multiplatform hashes
         id: multiplatform-hashes
-        uses: airtasker/dependabot-terraform-multiplatform-hashes-action@main
+        uses: airtasker/dependabot-terraform-multiplatform-hashes-action@v20220527
+```
+
+If you install this action, you probably also want to setup dependabot to automatically update the workflow version upon new release.
+See https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot for more details on keeping GitHub actions up to date via dependabot.
+
+```yaml
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
 ```
 
 ## Useful links
