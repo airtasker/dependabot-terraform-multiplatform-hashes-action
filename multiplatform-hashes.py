@@ -5,7 +5,9 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from typing import Any, Dict, List, Optional
+from urllib.error import HTTPError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
@@ -45,7 +47,17 @@ def make_modify_request(method: str, path: str, body: Dict[str, Any], expected_s
 def main():
     # Get information about the PR.
     # See: https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request
-    pr_payload = make_get_request(f'repos/{REPO_OWNER}/{REPO_NAME}/pulls/{PR_NUMBER}')
+    try:
+        pr_payload = make_get_request(f'repos/{REPO_OWNER}/{REPO_NAME}/pulls/{PR_NUMBER}')
+    except HTTPError as e:
+        # If this is a 401 error, this is probably a race condition where the GitHub action has
+        # triggered for the PR being created but the API for the PR still responds with a 401. Delay
+        # for a short amount of time and try again.
+        if e.code == 401:
+            time.sleep(3)
+            pr_payload = make_get_request(f'repos/{REPO_OWNER}/{REPO_NAME}/pulls/{PR_NUMBER}')
+        else:
+            raise
 
     # Bail if this is not a terraform dependabot PR.
     pr_label_names = {label['name'] for label in pr_payload.get('labels', [])}
