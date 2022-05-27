@@ -20,7 +20,6 @@ PR_NUMBER: int = 0
 
 FIXED_LABEL: str = ''
 
-TERRAFORM_PREFIX: str = ''
 TERRAFORM_PLATFORMS: List[str] = []
 
 
@@ -100,19 +99,23 @@ def main():
         # Work out which version of terraform to use.
         with open('.terraform-version') as f:
             terraform_version = f.read().strip()
-        terraform_path = os.path.join(TERRAFORM_PREFIX, terraform_version, 'terraform')
 
-        # Ensure we have this version of terraform installed.
-        if not os.path.exists(terraform_path):
-            assert False, f'Required terraform version {terraform_version} is not installed.'
+        # Download the appropriate version of terraform.
+        logging.info('Downloading terraform version %s', terraform_version)
+        subprocess.check_call(['curl', f'https://releases.hashicorp.com/terraform/{terraform_version}/terraform_{terraform_version}_linux_amd64.zip', '-o', 'terraform.zip'])
+        subprocess.check_call(['unzip', '-j', 'terraform.zip', '-d', '/'])
+        subprocess.check_call(['rm', 'terraform.zip'])
+        terraform_path = '/terraform'
 
         # Initialize the terraform directory, ignoring errors.
+        logging.info('Initialising terraform project.')
         try:
             subprocess.check_call([terraform_path, 'init'])
         except subprocess.CalledProcessError:
             pass
 
         # Attempt to create the multiplatform hashes.
+        logging.info('Updating provider hashes.')
         subprocess.check_call([terraform_path, 'providers', 'lock'] + [f'-platform={p}' for p in TERRAFORM_PLATFORMS])
 
         # Commit and push any changes to the lock file. We catch the error on commit as it is
@@ -150,7 +153,6 @@ if __name__ == '__main__':
     parser.add_argument('--gh-token-env-var', default='GITHUB_TOKEN', help='The name of the environment variable to read the GitHub auth token from.')
     parser.add_argument('--fixed-label', default='multiplatform-hashes', help='The name of the label to apply to PRs that have had this fix applied.')
     parser.add_argument('--terraform-platforms', default='darwin_amd64,linux_amd64', help='Comma separated list of the terraform platforms to fetch the hashes for.')
-    parser.add_argument('--terraform-prefix', default='/opt/terraform', help='The location of where the different versions of terraform are installed.')
     args = parser.parse_args()
 
     API_PREFIX = args.gh_api_prefix
@@ -158,7 +160,6 @@ if __name__ == '__main__':
     PR_NUMBER = args.gh_pr_number
     REPO_OWNER, REPO_NAME = args.gh_repository.split('/')
     FIXED_LABEL = args.fixed_label
-    TERRAFORM_PREFIX = args.terraform_prefix
     TERRAFORM_PLATFORMS = [p.strip() for p in args.terraform_platforms.split(',')]
 
     logging.info('Running with the following configuration:')
@@ -168,7 +169,6 @@ if __name__ == '__main__':
     logging.info('  REPO_OWNER: %s', REPO_OWNER)
     logging.info('  REPO_NAME: %s', REPO_NAME)
     logging.info('  FIXED_LABEL: %s', FIXED_LABEL)
-    logging.info('  TERRAFORM_PREFIX: %s', TERRAFORM_PREFIX)
     logging.info('  TERRAFORM_PLATFORMS: %s', TERRAFORM_PLATFORMS)
 
     main()
