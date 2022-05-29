@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
+import io
 import json
 import logging
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
+RE_MAYBE_SECRET = re.compile(r'.*_(secret|token|key)$', re.I)
 RE_PR_TITLE_FORMAT = re.compile(r'^Bump .+ from .+ to .+ in (?P<path>.+)$')
 
 API_PREFIX: str = ''
@@ -164,11 +167,25 @@ if __name__ == '__main__':
 
     logging.info('Running with the following configuration:')
     logging.info('  API_PREFIX: %s', API_PREFIX)
-    logging.info('  API_TOKEN: ...%s (%d) (%s)', API_TOKEN[-3:], len(API_TOKEN), args.gh_token_env_var)
+    logging.info('  API_TOKEN: ...%s (reading from environment variable %s; length %d)', API_TOKEN[-3:], args.gh_token_env_var, len(API_TOKEN))
     logging.info('  PR_NUMBER: %d', PR_NUMBER)
     logging.info('  REPO_OWNER: %s', REPO_OWNER)
     logging.info('  REPO_NAME: %s', REPO_NAME)
     logging.info('  FIXED_LABEL: %s', FIXED_LABEL)
     logging.info('  TERRAFORM_PLATFORMS: %s', TERRAFORM_PLATFORMS)
+
+    # Ensure we have an API token.
+    if not API_TOKEN:
+        out = io.StringIO()
+        for k, v in sorted(os.environ.items()):
+            obfuscated_v = v
+            if RE_MAYBE_SECRET.match(k):
+                if len(v) > 6:
+                    obfuscated_v = ('*' * (len(v) - 3)) + v[-3:]
+                else:
+                    obfuscated_v = '*' * len(v)
+            out.write(f'  {k}: {obfuscated_v} ({len(v)})\n')
+        logging.error('Failed to find API token in environment variable %s. Aborting. Environment was:\n%s', args.gh_token_env_var, out.getvalue())
+        sys.exit(1)
 
     main()
