@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Dependabot terraform multiplatform hashes
         id: multiplatform-hashes
-        uses: airtasker/dependabot-terraform-multiplatform-hashes-action@v20220527
+        uses: airtasker/dependabot-terraform-multiplatform-hashes-action@v20220529
 ```
 
 If you install this action, you probably also want to setup dependabot to automatically update the workflow version upon new release.
