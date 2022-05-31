@@ -76,6 +76,10 @@ def main():
         logging.info('Bailing as this is PR has already had the fix applied.')
         return
 
+    # Ensure we have an API token.
+    if not API_TOKEN_FULL:
+        abort_empty_api_token(True)
+
     # Get information about our GitHub user.
     # See: https://docs.github.com/en/rest/users/users#get-the-authenticated-user
     user_payload = make_get_request(API_TOKEN_FULL, 'user')
@@ -176,7 +180,7 @@ if __name__ == '__main__':
 
     API_PREFIX = args.gh_api_prefix
     API_TOKEN_LIGHT = os.environ[args.gh_token_light_env_var]
-    API_TOKEN_FULL = os.environ[args.gh_token_full_env_var]
+    API_TOKEN_FULL = os.environ.get(args.gh_token_full_env_var, '')
     PR_NUMBER = args.gh_pr_number
     REPO_OWNER, REPO_NAME = args.gh_repository.split('/')
     FIXED_LABEL = args.fixed_label
