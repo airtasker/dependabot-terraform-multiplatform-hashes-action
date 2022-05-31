@@ -28,11 +28,14 @@ jobs:
     if: startsWith(github.head_ref, 'dependabot/')
     runs-on: ubuntu-latest
     env:
-      GITHUB_TOKEN: ${{ secrets.DEPENDABOT_TERRAFORM_GITHUB_TOKEN }}
+      DEPENDABOT_TERRAFORM_GITHUB_TOKEN: ${{ secrets.DEPENDABOT_TERRAFORM_GITHUB_TOKEN }}
+    permissions:
+      issues: write
+      pull-requests: write
     steps:
       - name: Dependabot terraform multiplatform hashes
         id: multiplatform-hashes
-        uses: airtasker/dependabot-terraform-multiplatform-hashes-action@v20220529
+        uses: airtasker/dependabot-terraform-multiplatform-hashes-action@v202206011
 ```
 
 If you install this action, you probably also want to setup dependabot to automatically update the workflow version upon new release.

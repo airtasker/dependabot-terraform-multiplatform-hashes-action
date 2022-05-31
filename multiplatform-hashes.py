@@ -15,7 +15,8 @@ RE_MAYBE_SECRET = re.compile(r'.*_(secret|token|key)$', re.I)
 RE_PR_TITLE_FORMAT = re.compile(r'^Bump .+ from .+ to .+ in (?P<path>.+)$')
 
 API_PREFIX: str = ''
-API_TOKEN: str = ''
+API_TOKEN_LIGHT: str = ''
+API_TOKEN_FULL: str = ''
 
 REPO_OWNER: str = ''
 REPO_NAME: str = ''
@@ -26,9 +27,23 @@ FIXED_LABEL: str = ''
 TERRAFORM_PLATFORMS: List[str] = []
 
 
-def make_request(method: str, path: str, body: Optional[bytes], expected_status: int = 200) -> Dict[str, Any]:
+def abort_empty_api_token(is_full: bool):
+    out = io.StringIO()
+    for k, v in sorted(os.environ.items()):
+        obfuscated_v = v
+        if RE_MAYBE_SECRET.match(k):
+            if len(v) > 6:
+                obfuscated_v = ('*' * (len(v) - 3)) + v[-3:]
+            else:
+                obfuscated_v = '*' * len(v)
+        out.write(f'  {k}: {obfuscated_v} ({len(v)})\n')
+    logging.error('Failed to find %s API token in environment variable. Aborting. Environment was:\n%s', 'full' if is_full else 'light', out.getvalue())
+    sys.exit(1)
+
+
+def make_request(api_token: str, method: str, path: str, body: Optional[bytes], expected_status: int = 200) -> Dict[str, Any]:
     request = Request(urljoin(API_PREFIX, path), method=method, data=body)
-    request.add_header('Authorization', f'token {API_TOKEN}')
+    request.add_header('Authorization', f'token {api_token}')
     request.add_header('Accept', 'application/vnd.github.v3+json')
     logging.info('Making a %s request to %s.', request.get_method(), request.get_full_url())
     with urlopen(request) as response:
@@ -37,18 +52,18 @@ def make_request(method: str, path: str, body: Optional[bytes], expected_status:
         return json.loads(body)
 
 
-def make_get_request(path: str, expected_status: int = 200) -> Dict[str, Any]:
-    return make_request('GET', path, None, expected_status)
+def make_get_request(api_token: str, path: str, expected_status: int = 200) -> Dict[str, Any]:
+    return make_request(api_token, 'GET', path, None, expected_status)
 
 
-def make_modify_request(method: str, path: str, body: Dict[str, Any], expected_status: int = 200) -> Dict[str, Any]:
-    return make_request(method, path, json.dumps(body).encode('utf-8'), expected_status)
+def make_modify_request(api_token: str, method: str, path: str, body: Dict[str, Any], expected_status: int = 200) -> Dict[str, Any]:
+    return make_request(api_token, method, path, json.dumps(body).encode('utf-8'), expected_status)
 
 
 def main():
     # Get information about the PR.
     # See: https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request
-    pr_payload = make_get_request(f'repos/{REPO_OWNER}/{REPO_NAME}/pulls/{PR_NUMBER}')
+    pr_payload = make_get_request(API_TOKEN_LIGHT, f'repos/{REPO_OWNER}/{REPO_NAME}/pulls/{PR_NUMBER}')
 
     # Bail if this is not a terraform dependabot PR.
     pr_label_names = {label['name'] for label in pr_payload.get('labels', [])}
@@ -63,10 +78,10 @@ def main():
 
     # Get information about our GitHub user.
     # See: https://docs.github.com/en/rest/users/users#get-the-authenticated-user
-    user_payload = make_get_request('user')
+    user_payload = make_get_request(API_TOKEN_FULL, 'user')
     user_name = (user_payload.get('name') or '').strip() or user_payload['login']
     # See: https://docs.github.com/en/rest/users/emails#list-email-addresses-for-the-authenticated-user
-    user_email_payload = make_get_request('user/emails')
+    user_email_payload = make_get_request(API_TOKEN_FULL, 'user/emails')
     user_email = [p['email'] for p in user_email_payload if p['primary']][0]
 
     # Set our git commit identification.
@@ -74,7 +89,7 @@ def main():
     subprocess.check_call(['git', 'config', '--global', 'user.email', user_email])
 
     # Rewrite all SSH git operations to use HTTPS with our access token.
-    subprocess.check_call(['git', 'config', '--global', f'url.https://oauth2:{API_TOKEN}@github.com.insteadOf', 'ssh://git@github.com'])
+    subprocess.check_call(['git', 'config', '--global', f'url.https://oauth2:{API_TOKEN_FULL}@github.com.insteadOf', 'ssh://git@github.com'])
 
     # Obtain the terraform project path from the PR title.
     pr_title = pr_payload['title']
@@ -134,7 +149,7 @@ def main():
 
     # Add the fixed label to the PR so that the fixer process does not attempt to run again.
     pr_label_names.add(FIXED_LABEL)
-    make_modify_request('PATCH', f'repos/{REPO_OWNER}/{REPO_NAME}/issues/{PR_NUMBER}', {
+    make_modify_request(API_TOKEN_LIGHT, 'PATCH', f'repos/{REPO_OWNER}/{REPO_NAME}/issues/{PR_NUMBER}', {
         'labels': list(pr_label_names),
     })
     logging.info('Finished applying multiplatform hashes fix to PR #%d.', PR_NUMBER)
@@ -153,13 +168,15 @@ if __name__ == '__main__':
     parser.add_argument('--gh-api-prefix', default='https://api.github.com', help='The API prefix to make GitHub API requests to. You probably want to set this to be $GITHUB_API_URL')
     parser.add_argument('--gh-pr-number', required=True, type=int, help='The GitHub PR number. You probably want to extract this from $GITHUB_REF.')
     parser.add_argument('--gh-repository', required=True, help='The GitHub organisation/repository pair. You probably want to set this to be the $GITHUB_REPOSITORY')
-    parser.add_argument('--gh-token-env-var', default='GITHUB_TOKEN', help='The name of the environment variable to read the GitHub auth token from.')
+    parser.add_argument('--gh-token-light-env-var', default='GITHUB_TOKEN', help='The name of the environment variable to read the light access GitHub auth token from.')
+    parser.add_argument('--gh-token-full-env-var', default='DEPENDABOT_TERRAFORM_GITHUB_TOKEN', help='The name of the environment variable to read the full access GitHub auth token from.')
     parser.add_argument('--fixed-label', default='multiplatform-hashes', help='The name of the label to apply to PRs that have had this fix applied.')
     parser.add_argument('--terraform-platforms', default='darwin_amd64,linux_amd64', help='Comma separated list of the terraform platforms to fetch the hashes for.')
     args = parser.parse_args()
 
     API_PREFIX = args.gh_api_prefix
-    API_TOKEN = os.environ[args.gh_token_env_var]
+    API_TOKEN_LIGHT = os.environ[args.gh_token_light_env_var]
+    API_TOKEN_FULL = os.environ[args.gh_token_full_env_var]
     PR_NUMBER = args.gh_pr_number
     REPO_OWNER, REPO_NAME = args.gh_repository.split('/')
     FIXED_LABEL = args.fixed_label
@@ -167,7 +184,8 @@ if __name__ == '__main__':
 
     logging.info('Running with the following configuration:')
     logging.info('  API_PREFIX: %s', API_PREFIX)
-    logging.info('  API_TOKEN: ...%s (reading from environment variable %s; length %d)', API_TOKEN[-3:], args.gh_token_env_var, len(API_TOKEN))
+    logging.info('  API_TOKEN_LIGHT: ...%s (reading from environment variable %s; length %d)', API_TOKEN_LIGHT[-3:], args.gh_token_light_env_var, len(API_TOKEN_LIGHT))
+    logging.info('  API_TOKEN_FULL: ...%s (reading from environment variable %s; length %d)', API_TOKEN_FULL[-3:], args.gh_token_full_env_var, len(API_TOKEN_FULL))
     logging.info('  PR_NUMBER: %d', PR_NUMBER)
     logging.info('  REPO_OWNER: %s', REPO_OWNER)
     logging.info('  REPO_NAME: %s', REPO_NAME)
@@ -175,17 +193,7 @@ if __name__ == '__main__':
     logging.info('  TERRAFORM_PLATFORMS: %s', TERRAFORM_PLATFORMS)
 
     # Ensure we have an API token.
-    if not API_TOKEN:
-        out = io.StringIO()
-        for k, v in sorted(os.environ.items()):
-            obfuscated_v = v
-            if RE_MAYBE_SECRET.match(k):
-                if len(v) > 6:
-                    obfuscated_v = ('*' * (len(v) - 3)) + v[-3:]
-                else:
-                    obfuscated_v = '*' * len(v)
-            out.write(f'  {k}: {obfuscated_v} ({len(v)})\n')
-        logging.error('Failed to find API token in environment variable %s. Aborting. Environment was:\n%s', args.gh_token_env_var, out.getvalue())
-        sys.exit(1)
+    if not API_TOKEN_LIGHT:
+        abort_empty_api_token(False)
 
     main()
